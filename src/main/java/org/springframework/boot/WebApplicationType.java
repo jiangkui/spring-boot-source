@@ -73,7 +73,6 @@ public enum WebApplicationType {
 	 */
 	static WebApplicationType deduceFromClasspath() {
 		// ClassUtils.isPresent("是否存在的Class", classloader); 是通过 Class.forName(className) 的方式查找 Classpath 是否存在这个 Class 的。
-		// 疑问点：Classpath 都包含哪些类？参见[ClassLoader 相关系列文章](文章地址) TODO 文章写完了地址贴一下。
 		if (ClassUtils.isPresent(WEBFLUX_INDICATOR_CLASS, null) && !ClassUtils.isPresent(WEBMVC_INDICATOR_CLASS, null)
 				&& !ClassUtils.isPresent(JERSEY_INDICATOR_CLASS, null)) {
 			return WebApplicationType.REACTIVE;

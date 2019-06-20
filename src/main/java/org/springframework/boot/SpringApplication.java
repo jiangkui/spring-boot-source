@@ -248,23 +248,37 @@ public class SpringApplication {
 	 * @see #SpringApplication(ResourceLoader, Class...)
 	 * @see #setSources(Set)
 	 */
+
+    /**
+     * 创建 SpringApplication 实例
+     *
+     * @param primarySources 整个应用将从这个 Class 的注解进行加载。
+     */
 	public SpringApplication(Class<?>... primarySources) {
-		// 创建 SpringApplication 实例，整个应用将从 primarySources 这个 Class 的注解进行加载。
 		this(null, primarySources);
 	}
 
-	/**
-	 * Create a new {@link SpringApplication} instance. The application context will load
-	 * beans from the specified primary sources (see {@link SpringApplication class-level}
-	 * documentation for details. The instance can be customized before calling
-	 * {@link #run(String...)}.
-	 * @param resourceLoader the resource loader to use
-	 * @param primarySources the primary bean sources
-	 * @see #run(Class, String[])
-	 * @see #setSources(Set)
-	 */
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
+//	/**
+//	 * Create a new {@link SpringApplication} instance. The application context will load
+//	 * beans from the specified primary sources (see {@link SpringApplication class-level}
+//	 * documentation for details. The instance can be customized before calling
+//	 * {@link #run(String...)}.
+//	 * @param resourceLoader the resource loader to use
+//	 * @param primarySources the primary bean sources
+//	 * @see #run(Class, String[])
+//	 * @see #setSources(Set)
+//	 */
+//
+
+    /**
+     * SpringApplication 构造方法做了以下几件事：
+     *      1. 推测容器类型
+     *      2. 实例化 ApplicationContextInitializer
+     *      3. 实例化 ApplicationListener
+     *      4. 查找 mainClass
+     */
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "PrimarySources must not be null");
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
@@ -272,16 +286,25 @@ public class SpringApplication {
 		// 通过 ClassPath 中存在的类，推断当前要是用哪一种web容器：SERVLET、REACTIVE、NONE
 		this.webApplicationType = WebApplicationType.deduceFromClasspath();
 
-		//
+		// 从 META-INF/spring.factories 获取 ApplicationContextInitializer 并反射实例化。
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
 
-		//
+		// 从 META-INF/spring.factories 获取 ApplicationListener 的实例化对象。
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
 
-		//
+		// 推测 mainClass，即执行main方法的Class。用途：打印Log时使用，可以获取class 对应的 jar 对象（Package），有jar包版本号等相关信息。
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
 
+    /**
+     * 推测 mainClass
+     * 怎么找：
+     *      通过堆栈信息查找 main 方法对应的Class，即程序第一个执行的方法。
+     * 有啥用：
+     *      打印日志用。
+     * 怎么用：
+     *      能获取到 Class 对应的 jar 包信息。通过这个 Class 可以拿到对应的 Package 对象（class.getPackage()），即 class 的jar包对象，有jar包的一些信息。
+     */
 	private Class<?> deduceMainApplicationClass() {
 		try {
 			StackTraceElement[] stackTrace = new RuntimeException().getStackTrace();
@@ -423,15 +446,31 @@ public class SpringApplication {
 				getSpringFactoriesInstances(SpringApplicationRunListener.class, types, this, args));
 	}
 
+    /**
+     * 先从 classpath 查找所有的 META-INF/spring.factories 文件，包括 jar 包内的 spring.factories。
+     *      2. 缓存这些 spring.factories 文件
+     *      找跟参数 type 匹配的 className
+     */
+
 	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type) {
 		return getSpringFactoriesInstances(type, new Class<?>[] {});
 	}
 
+    /**
+     * 获得 spring.factories 中的实例
+     *
+     * @param type 要实例化的 ClassType
+     */
 	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, Class<?>[] parameterTypes, Object... args) {
 		ClassLoader classLoader = getClassLoader();
-		// Use names and ensure unique to protect against duplicates
+
+        // 1.查找：从所有的 META-INF/spring.factories 文件(包括 jar 包内)，查找 type 对应的 name 配置
 		Set<String> names = new LinkedHashSet<>(SpringFactoriesLoader.loadFactoryNames(type, classLoader));
+
+		// 2.实例化：反射，用 constructor.newInstance(args) 实例化
 		List<T> instances = createSpringFactoriesInstances(type, parameterTypes, classLoader, args, names);
+
+		// 排序：实现 Ordered 接口的 instance，按 order 值升序排列（1，2，3...），没实现 Ordered 接口的放到最后，并且不进行排序（顺序同 spring.factories 的顺序）。
 		AnnotationAwareOrderComparator.sort(instances);
 		return instances;
 	}
@@ -442,9 +481,14 @@ public class SpringApplication {
 		List<T> instances = new ArrayList<>(names.size());
 		for (String name : names) {
 			try {
+			    // 通过 className 找到对应的 Class
 				Class<?> instanceClass = ClassUtils.forName(name, classLoader);
 				Assert.isAssignable(type, instanceClass);
+
+				// 获取构造方法：根据参数寻找匹配的构造方法
 				Constructor<?> constructor = instanceClass.getDeclaredConstructor(parameterTypes);
+
+				// 反射实例化对象：constructor.newInstance(args);
 				T instance = (T) BeanUtils.instantiateClass(constructor, args);
 				instances.add(instance);
 			}
